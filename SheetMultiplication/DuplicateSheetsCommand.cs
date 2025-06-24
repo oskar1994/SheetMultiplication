@@ -78,6 +78,38 @@ namespace SheetMultiplication
                     sheet.Name = sheetNames[i];
                     sheet.SheetNumber = sheetNumbers[i];
 
+                    // Skopiuj parametry z sekcji "Dane Identyfikacyjne" (i inne niestandardowe) z oryginalnego arkusza
+                    foreach (Parameter param in selectedSheet.Parameters)
+                    {
+                        // Pomijamy wbudowane parametry, które już ustawiliśmy lub których nie chcemy nadpisywać
+                        if (param.IsReadOnly ||
+                            param.StorageType == StorageType.None ||
+                            (param.Definition is InternalDefinition idef &&
+                             (idef.BuiltInParameter == BuiltInParameter.SHEET_NAME ||
+                              idef.BuiltInParameter == BuiltInParameter.SHEET_NUMBER)))
+                            continue;
+
+                        Parameter newParam = sheet.get_Parameter(param.Definition);
+                        if (newParam != null && !newParam.IsReadOnly)
+                        {
+                            switch (param.StorageType)
+                            {
+                                case StorageType.String:
+                                    newParam.Set(param.AsString());
+                                    break;
+                                case StorageType.Double:
+                                    newParam.Set(param.AsDouble());
+                                    break;
+                                case StorageType.Integer:
+                                    newParam.Set(param.AsInteger());
+                                    break;
+                                case StorageType.ElementId:
+                                    newParam.Set(param.AsElementId());
+                                    break;
+                            }
+                        }
+                    }
+
 
                     // Find the new Title Block instance on the new sheet
                     var newTbCollector = new FilteredElementCollector(doc, sheet.Id)
