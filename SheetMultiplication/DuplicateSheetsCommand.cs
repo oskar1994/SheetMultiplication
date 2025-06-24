@@ -38,8 +38,8 @@ namespace SheetMultiplication
                 .Select(s => s.SheetNumber)
                 .ToHashSet();
 
-            var (sheetName, sheetNumbers) = SheetNamingForm.Show(copyCount, existingSheetNumbers);
-            if (sheetName == null || sheetNumbers == null) return Result.Cancelled;
+            var (sheetNames, sheetNumbers) = SheetNamingForm.Show(copyCount, existingSheetNumbers);
+            if (sheetNames == null || sheetNumbers == null) return Result.Cancelled;
 
             // 4. Pobierz title block
             var tbCollector = new FilteredElementCollector(doc, selectedSheet.Id)
@@ -75,7 +75,7 @@ namespace SheetMultiplication
                 for (int i = 0; i < copyCount; i++)
                 {
                     ViewSheet sheet = ViewSheet.Create(doc, titleBlockTypeId);
-                    sheet.Name = sheetName;
+                    sheet.Name = sheetNames[i];
                     sheet.SheetNumber = sheetNumbers[i];
 
 
@@ -209,65 +209,74 @@ namespace SheetMultiplication
 
     public static class SheetNamingForm
     {
-        public static (string, List<string>) Show(int count, HashSet<string> existingNumbers)
+        public static (List<string>, List<string>) Show(int count, HashSet<string> existingNumbers)
         {
-            string nameResult = null;
+            List<string> names = new List<string>();
             List<string> numbers = new List<string>();
 
-            System.Windows.Forms.Form form = new System.Windows.Forms.Form { Width = 420, Height = 200 + count * 30 };
+            System.Windows.Forms.Form form = new System.Windows.Forms.Form { Width = 600, Height = 200 + count * 30 };
             form.AutoScroll = true;
 
-            Label nameLabel = new Label { Left = 10, Top = 10, Width = 200 };
-            System.Windows.Forms.TextBox nameBox = new System.Windows.Forms.TextBox { Left = 10, Top = 30, Width = 370 };
+            // Headery
+            Label numHeader = new Label { Text = "Numer arkusza", Left = 10, Top = 10, Width = 200 };
+            Label nameHeader = new Label { Text = "Nazwa arkusza", Left = 220, Top = 10, Width = 350 };
+            form.Controls.Add(numHeader);
+            form.Controls.Add(nameHeader);
 
-            Label numLabel = new Label { Text = "Numery arkuszy:", Left = 10, Top = 60, Width = 200 };
-
-            var boxes = new List<System.Windows.Forms.TextBox>();
+            // Pola tekstowe
+            var numBoxes = new List<System.Windows.Forms.TextBox>();
+            var nameBoxes = new List<System.Windows.Forms.TextBox>();
             for (int i = 0; i < count; i++)
             {
-                var box = new System.Windows.Forms.TextBox
+                var numBox = new System.Windows.Forms.TextBox
                 {
                     Left = 10,
-                    Top = 90 + i * 30,
-                    Width = 370
+                    Top = 40 + i * 30,
+                    Width = 200
                 };
-                form.Controls.Add(box);
-                boxes.Add(box);
+                var nameBox = new System.Windows.Forms.TextBox
+                {
+                    Left = 220,
+                    Top = 40 + i * 30,
+                    Width = 350
+                };
+                form.Controls.Add(numBox);
+                form.Controls.Add(nameBox);
+                numBoxes.Add(numBox);
+                nameBoxes.Add(nameBox);
             }
 
-            Button ok = new Button { Left = 150, Top = 100 + count * 30, Width = 100 };
+            Button ok = new Button { Text = "OK", Left = 250, Top = 50 + count * 30, Width = 100 };
             ok.Click += (s, e) =>
             {
-                var tempList = new List<string>();
-                foreach (var b in boxes)
+                var tempNumbers = new List<string>();
+                var tempNames = new List<string>();
+                for (int i = 0; i < count; i++)
                 {
-                    string val = b.Text.Trim();
-                    if (string.IsNullOrEmpty(val) || existingNumbers.Contains(val) || tempList.Contains(val))
+                    string numVal = numBoxes[i].Text.Trim();
+                    string nameVal = nameBoxes[i].Text.Trim();
+                    if (string.IsNullOrEmpty(numVal) || existingNumbers.Contains(numVal) || tempNumbers.Contains(numVal))
                     {
-                        MessageBox.Show($"Nieprawidłowy lub powtórzony numer arkusza: \"{val}\"", "Błąd");
+                        MessageBox.Show($"Nieprawidłowy lub powtórzony numer arkusza: \"{numVal}\"", "Błąd");
                         return;
                     }
-                    tempList.Add(val);
+                    if (string.IsNullOrEmpty(nameVal))
+                    {
+                        MessageBox.Show($"Podaj nazwę arkusza dla wiersza {i + 1}.", "Błąd");
+                        return;
+                    }
+                    tempNumbers.Add(numVal);
+                    tempNames.Add(nameVal);
                 }
-
-                nameResult = nameBox.Text.Trim();
-                if (string.IsNullOrEmpty(nameResult))
-                {
-                    MessageBox.Show("Podaj nazwę arkusza.", "Błąd");
-                    return;
-                }
-
-                numbers = tempList;
+                numbers = tempNumbers;
+                names = tempNames;
                 form.DialogResult = DialogResult.OK;
             };
 
-            form.Controls.Add(nameLabel);
-            form.Controls.Add(nameBox);
-            form.Controls.Add(numLabel);
             form.Controls.Add(ok);
 
             var result = form.ShowDialog();
-            return result == DialogResult.OK ? (nameResult, numbers) : (null, null);
+            return result == DialogResult.OK ? (names, numbers) : (null, null);
         }
 
 
