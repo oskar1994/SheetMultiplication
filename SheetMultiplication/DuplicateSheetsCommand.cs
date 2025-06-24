@@ -57,11 +57,40 @@ namespace SheetMultiplication
             using (Transaction t = new Transaction(doc, "Powielanie arkuszy"))
             {
                 t.Start();
+                // Get all viewports on the selected sheet
+                var viewports = new FilteredElementCollector(doc, selectedSheet.Id)
+                    .OfClass(typeof(Viewport))
+                    .Cast<Viewport>()
+                    .ToList();
+
+                // Filter only legend viewports
+                var legendViewports = viewports
+                    .Where(vp =>
+                    {
+                        var view = doc.GetElement(vp.ViewId) as Autodesk.Revit.DB.View;
+                        return view != null && view.ViewType == ViewType.Legend;
+                    })
+                    .ToList();
+
                 for (int i = 0; i < copyCount; i++)
                 {
                     ViewSheet sheet = ViewSheet.Create(doc, titleBlockTypeId);
                     sheet.Name = sheetName;
                     sheet.SheetNumber = sheetNumbers[i];
+
+                    // Copy legend viewports
+                    foreach (var legendVp in legendViewports)
+                    {
+                        var legendView = doc.GetElement(legendVp.ViewId) as Autodesk.Revit.DB.View;
+                        if (legendView != null)
+                        {
+                            // Get the location of the legend on the source sheet
+                            XYZ location = (legendVp.GetBoxCenter());
+
+                            // Place the legend on the new sheet at the same location
+                            Viewport.Create(doc, sheet.Id, legendView.Id, location);
+                        }
+                    }
                 }
                 t.Commit();
             }
