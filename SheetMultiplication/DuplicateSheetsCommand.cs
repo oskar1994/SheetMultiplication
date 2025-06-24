@@ -78,17 +78,32 @@ namespace SheetMultiplication
                     sheet.Name = sheetName;
                     sheet.SheetNumber = sheetNumbers[i];
 
-                    // Copy legend viewports
+                    // Get bounding box of source and target sheets
+                    BoundingBoxUV sourceOutline = selectedSheet.Outline;
+                    BoundingBoxUV targetOutline = sheet.Outline;
+
+                    // Lower-left corner of the source and target sheets
+                    XYZ sourceOrigin = new XYZ(sourceOutline.Min.U, sourceOutline.Min.V, 0);
+                    XYZ targetOrigin = new XYZ(targetOutline.Min.U, targetOutline.Min.V, 0);
+
                     foreach (var legendVp in legendViewports)
                     {
                         var legendView = doc.GetElement(legendVp.ViewId) as Autodesk.Revit.DB.View;
                         if (legendView != null)
                         {
-                            // Get the location of the legend on the source sheet
-                            XYZ location = (legendVp.GetBoxCenter());
+                            // Offset from source sheet origin to legend center
+                            XYZ sourceCenter = legendVp.GetBoxCenter();
+                            XYZ offset = sourceCenter - sourceOrigin;
 
-                            // Place the legend on the new sheet at the same location
-                            Viewport.Create(doc, sheet.Id, legendView.Id, location);
+                            // Place at the same offset on the new sheet
+                            XYZ targetCenter = targetOrigin + offset;
+
+                            Viewport newVp = Viewport.Create(doc, sheet.Id, legendView.Id, targetCenter);
+
+                            if (newVp != null && legendVp.GetTypeId() != newVp.GetTypeId())
+                            {
+                                newVp.ChangeTypeId(legendVp.GetTypeId());
+                            }
                         }
                     }
                 }
