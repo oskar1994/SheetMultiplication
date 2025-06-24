@@ -78,6 +78,49 @@ namespace SheetMultiplication
                     sheet.Name = sheetName;
                     sheet.SheetNumber = sheetNumbers[i];
 
+
+                    // Find the new Title Block instance on the new sheet
+                    var newTbCollector = new FilteredElementCollector(doc, sheet.Id)
+                        .OfCategory(BuiltInCategory.OST_TitleBlocks)
+                        .WhereElementIsNotElementType();
+                    var newTitleBlock = newTbCollector.FirstOrDefault();
+
+                    if (newTitleBlock != null && titleBlock != null)
+                    {
+                        // Copy instance parameters
+                        foreach (Parameter param in titleBlock.Parameters)
+                        {
+                            // Skip copying the "Sheet Name" parameter
+                            if (param.Definition is InternalDefinition idef &&
+                               (idef.BuiltInParameter == BuiltInParameter.SHEET_NAME ||
+                                idef.BuiltInParameter == BuiltInParameter.SHEET_NUMBER))
+                                continue;
+
+                            if (!param.IsReadOnly && param.StorageType != StorageType.None)
+                            {
+                                Parameter newParam = newTitleBlock.get_Parameter(param.Definition);
+                                if (newParam != null && !newParam.IsReadOnly)
+                                {
+                                    switch (param.StorageType)
+                                    {
+                                        case StorageType.String:
+                                            newParam.Set(param.AsString());
+                                            break;
+                                        case StorageType.Double:
+                                            newParam.Set(param.AsDouble());
+                                            break;
+                                        case StorageType.Integer:
+                                            newParam.Set(param.AsInteger());
+                                            break;
+                                        case StorageType.ElementId:
+                                            newParam.Set(param.AsElementId());
+                                            break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     // Get bounding box of source and target sheets
                     BoundingBoxUV sourceOutline = selectedSheet.Outline;
                     BoundingBoxUV targetOutline = sheet.Outline;
