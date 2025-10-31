@@ -1,11 +1,10 @@
 ﻿
 using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Windows.Forms;
 using Autodesk.Revit.UI;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.Attributes;
+using System.Collections.Generic;
 
 namespace SheetMultiplication
 {
@@ -24,21 +23,45 @@ namespace SheetMultiplication
                 .Where(s => !s.IsTemplate)
                 .ToList();
 
-            ViewSheet selectedSheet = SheetSelectionForm.Show(allSheets);
-            if (selectedSheet == null) return Result.Cancelled;
+            SheetSelectionForm form = new SheetSelectionForm();
+            var sheetSelectionFormResult = form.Show(allSheets);
+            if (sheetSelectionFormResult.SelectedSheet == null) return Result.Cancelled;
 
-            // 2. Liczba kopii
-            int copyCount = SheetCopyCountForm.Show();
-            if (copyCount <= 0) return Result.Cancelled;
+            var selectedSheet = sheetSelectionFormResult.SelectedSheet;
 
-            // 3. Nazwa i numery
             var existingSheetNumbers = new FilteredElementCollector(doc)
-                .OfClass(typeof(ViewSheet))
-                .Cast<ViewSheet>()
-                .Select(s => s.SheetNumber)
-                .ToHashSet();
+                    .OfClass(typeof(ViewSheet))
+                    .Cast<ViewSheet>()
+                    .Select(s => s.SheetNumber)
+                    .ToHashSet();
 
-            var (sheetNames, sheetNumbers) = SheetNamingForm.Show(copyCount, existingSheetNumbers);
+            int copyCount = 0;
+            List<string> sheetNames = new List<string>();
+            List<string> sheetNumbers = new List<string>();
+
+            if (sheetSelectionFormResult.Type == InputFormatType.Form)
+            {
+                copyCount = SheetCopyCountForm.Show();
+                if (copyCount <= 0) return Result.Cancelled;            
+                var sheetNamingFormResult = SheetNamingForm.Show(copyCount, existingSheetNumbers);
+                sheetNames = sheetNamingFormResult.Item1;
+                sheetNumbers = sheetNamingFormResult.Item2;
+            }else if (sheetSelectionFormResult.Type == InputFormatType.XLS)
+            {
+                var xlsImporter = new XLSSheetDataImporter();
+                var sheets = xlsImporter.ImportSheetData(existingSheetNumbers);
+                if (sheets == null) return Result.Cancelled;
+                sheetNames = sheets.Select(x=>x.Name).ToList();
+                sheetNumbers = sheets.Select(x => x.Number).ToList();
+                copyCount = sheets.Count;
+            }
+            else if (sheetSelectionFormResult.Type == InputFormatType.TEST)
+            {
+                var testForm = new TestForm();
+                var dialog = testForm.ShowDialog();
+                return Result.Cancelled;
+            }
+
             if (sheetNames == null || sheetNumbers == null) return Result.Cancelled;
 
             // 4. Pobierz title block
@@ -77,6 +100,7 @@ namespace SheetMultiplication
                     ViewSheet sheet = ViewSheet.Create(doc, titleBlockTypeId);
                     sheet.Name = sheetNames[i];
                     sheet.SheetNumber = sheetNumbers[i];
+                    
 
                     // Skopiuj parametry z sekcji "Dane Identyfikacyjne" (i inne niestandardowe) z oryginalnego arkusza
                     foreach (Parameter param in selectedSheet.Parameters)
@@ -188,130 +212,5 @@ namespace SheetMultiplication
             TaskDialog.Show("Sukces", $"Utworzono {copyCount} arkuszy.");
             return Result.Succeeded;
         }
-    }
-
-    public static class SheetSelectionForm
-    {
-        public static ViewSheet Show(List<ViewSheet> sheets)
-        {
-            ViewSheet result = null;
-
-            System.Windows.Forms.Form form = new System.Windows.Forms.Form { Text = "Wybierz arkusz", Width = 400, Height = 500 };
-            ListBox listBox = new ListBox { Dock = DockStyle.Fill };
-            var map = new Dictionary<string, ViewSheet>();
-            foreach (var sheet in sheets)
-            {
-                string label = $"{sheet.SheetNumber} - {sheet.Name}";
-                map[label] = sheet;
-                listBox.Items.Add(label);
-            }
-
-            Button ok = new Button { Text = "OK", Dock = DockStyle.Bottom };
-            ok.Click += (s, e) => form.DialogResult = DialogResult.OK;
-
-            form.Controls.Add(listBox);
-            form.Controls.Add(ok);
-
-            if (form.ShowDialog() == DialogResult.OK && listBox.SelectedItem != null)
-                result = map[listBox.SelectedItem.ToString()];
-            return result;
-        }
-    }
-
-    public static class SheetCopyCountForm
-    {
-        public static int Show()
-        {
-            int result = 0;
-
-            System.Windows.Forms.Form form = new System.Windows.Forms.Form { Text = "Ile kopii?", Width = 300, Height = 150 };
-            NumericUpDown numeric = new NumericUpDown { Minimum = 1, Maximum = 100, Value = 3, Dock = DockStyle.Top };
-            Button ok = new Button { Text = "OK", Dock = DockStyle.Bottom };
-            ok.Click += (s, e) => form.DialogResult = DialogResult.OK;
-
-            form.Controls.Add(numeric);
-            form.Controls.Add(ok);
-
-            if (form.ShowDialog() == DialogResult.OK)
-                result = (int)numeric.Value;
-
-            return result;
-        }
-    }
-
-    public static class SheetNamingForm
-    {
-        public static (List<string>, List<string>) Show(int count, HashSet<string> existingNumbers)
-        {
-            List<string> names = new List<string>();
-            List<string> numbers = new List<string>();
-
-            System.Windows.Forms.Form form = new System.Windows.Forms.Form { Width = 600, Height = 200 + count * 30 };
-            form.AutoScroll = true;
-
-            // Headery
-            Label numHeader = new Label { Text = "Numer arkusza", Left = 10, Top = 10, Width = 200 };
-            Label nameHeader = new Label { Text = "Nazwa arkusza", Left = 220, Top = 10, Width = 350 };
-            form.Controls.Add(numHeader);
-            form.Controls.Add(nameHeader);
-
-            // Pola tekstowe
-            var numBoxes = new List<System.Windows.Forms.TextBox>();
-            var nameBoxes = new List<System.Windows.Forms.TextBox>();
-            for (int i = 0; i < count; i++)
-            {
-                var numBox = new System.Windows.Forms.TextBox
-                {
-                    Left = 10,
-                    Top = 40 + i * 30,
-                    Width = 200
-                };
-                var nameBox = new System.Windows.Forms.TextBox
-                {
-                    Left = 220,
-                    Top = 40 + i * 30,
-                    Width = 350
-                };
-                form.Controls.Add(numBox);
-                form.Controls.Add(nameBox);
-                numBoxes.Add(numBox);
-                nameBoxes.Add(nameBox);
-            }
-
-            Button ok = new Button { Text = "OK", Left = 250, Top = 50 + count * 30, Width = 100 };
-            ok.Click += (s, e) =>
-            {
-                var tempNumbers = new List<string>();
-                var tempNames = new List<string>();
-                for (int i = 0; i < count; i++)
-                {
-                    string numVal = numBoxes[i].Text.Trim();
-                    string nameVal = nameBoxes[i].Text.Trim();
-                    if (string.IsNullOrEmpty(numVal) || existingNumbers.Contains(numVal) || tempNumbers.Contains(numVal))
-                    {
-                        MessageBox.Show($"Nieprawidłowy lub powtórzony numer arkusza: \"{numVal}\"", "Błąd");
-                        return;
-                    }
-                    if (string.IsNullOrEmpty(nameVal))
-                    {
-                        MessageBox.Show($"Podaj nazwę arkusza dla wiersza {i + 1}.", "Błąd");
-                        return;
-                    }
-                    tempNumbers.Add(numVal);
-                    tempNames.Add(nameVal);
-                }
-                numbers = tempNumbers;
-                names = tempNames;
-                form.DialogResult = DialogResult.OK;
-            };
-
-            form.Controls.Add(ok);
-
-            var result = form.ShowDialog();
-            return result == DialogResult.OK ? (names, numbers) : (null, null);
-        }
-
-
-
     }
 }
