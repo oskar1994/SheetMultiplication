@@ -1,6 +1,7 @@
-﻿using System.Collections.Generic;
+﻿using Autodesk.Revit.DB;
+using DocumentFormat.OpenXml.Wordprocessing;
+using System.Collections.Generic;
 using System.Windows.Forms;
-using Autodesk.Revit.DB;
 
 namespace SheetMultiplication
 {
@@ -40,13 +41,13 @@ namespace SheetMultiplication
                 listBox.Items.Add(label);
             }
 
-            Button importFromForm = new Button { Text = "Import z Okna", Dock = DockStyle.Bottom };
-            Button importFromXLS = new Button { Text = "Import z XLS", Dock = DockStyle.Bottom };
-            Button test = new Button { Text = "Test", Dock = DockStyle.Bottom };
+            Button importFromForm = new Button { Text = "Import z Okna", Dock = DockStyle.Bottom, Enabled = false };
+            Button importFromXLS = new Button { Text = "Import z XLS", Dock = DockStyle.Bottom, Enabled = false };
+            Button test = new Button { Text = "Test", Dock = DockStyle.Bottom, Enabled = false };
             importFromForm.Click += (s, e) => { form.DialogResult = DialogResult.OK; type = InputFormatType.Form; };
             importFromXLS.Click += (s, e) => { form.DialogResult = DialogResult.OK; type = InputFormatType.XLS; };
             test.Click += (s, e) => { form.DialogResult = DialogResult.OK; type = InputFormatType.TEST; };
-
+            listBox.SelectedValueChanged += (s, e) => { importFromForm.Enabled = true; importFromXLS.Enabled = true; test.Enabled = true; };
 
 
             form.Controls.Add(listBox);
